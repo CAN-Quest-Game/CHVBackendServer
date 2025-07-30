@@ -10,7 +10,7 @@ import time
 import server.config as config
 from ecus.ecm import ECM
 from ecus.bcm import BCM    
-from ecus.vcu import VCU
+from ecus.dcu import DCU
         
 class CAN_Handler:
     '''Class to handle CANbus initialization, message sending and recieving, ECU additions. Creates instance of type can_handler.'''
@@ -130,7 +130,7 @@ class CAN_Handler:
         ecu_dict = {
                 0x123: ['ECM', 0x321], 
                 0x456: ['BCM', 0x654], 
-                0x789: ['VCU', 0x7FF]
+                0x789: ['DCU', 0x7FF]
                 }
         
         #TODO: add your own ECU initialization here, make sure to import custom class at the top as well
@@ -139,8 +139,8 @@ class CAN_Handler:
                 self.ecus[req_arb_id] = ECM(name, req_arb_id, rsp_arb_id, verbose=config.verbose)
             elif name == "BCM":
                 self.ecus[req_arb_id] = BCM(name, req_arb_id, rsp_arb_id, verbose=config.verbose)
-            elif name == "VCU":
-                self.ecus[req_arb_id] = VCU(name, req_arb_id, rsp_arb_id, verbose=config.verbose)
+            elif name == "DCU":
+                self.ecus[req_arb_id] = DCU(name, req_arb_id, rsp_arb_id, verbose=config.verbose)
     
     def get_ecu(self,arb_id):
         '''Helper function to return request arbitration ID of the ECU.'''

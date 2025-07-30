@@ -1,8 +1,8 @@
 '''
-Filename: vcu.py
+Filename: dcu.py
 Author: CANQuest Team
 Version: 1.0prod
-Description: Custom Vehicle Cockpit Unit (VCU) class used for Quest 3. Inherits from the ECU class.
+Description: Custom Door Control Unit (DCU) class used for Quest 3. Inherits from the ECU class.
 '''
 import random
 import re
@@ -10,7 +10,7 @@ from .ecu import ECU
 from services.uds_services import *
 import server.config as config
 
-class VCU(ECU):
+class DCU(ECU):
         
         def __init__(self, name, req_arb_id, rsp_arb_id, verbose=False):
             super().__init__(name, req_arb_id, rsp_arb_id, verbose=False)
@@ -75,7 +75,7 @@ class VCU(ECU):
                             if (self.verbose): print("success yuh")
                             cansend.send_msg(self.rsp_arb_id, [rsp[0], 0x66, 0x6C, 0x61, 0x67, 0x7B, 0x79, 0x61, 0x5F, 0x64, 0x69, 0x64, 0x5F, 0x69, 0x74, 0x5F, 0x64, 0x75, 0x64, 0x65, 0x7D], is_multiframe=True)
                             if config.client_sock:
-                                config.client_sock.sendall("0x04".encode('utf-8'))
+                                config.client_sock.sendall("0x02".encode('utf-8'))
                         else:
                             cansend.send_msg(self.rsp_arb_id, rsp)
                     else:
