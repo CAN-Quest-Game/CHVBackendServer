@@ -33,13 +33,14 @@ def client_handler(client_sock, can_handler, stop_can, verbose=config.verbose):
     try:
         while not stop_can.is_set():
             data = client_sock.recv(1024).decode()
+            can_handler.process_client_data(data)
             if not data:
                 print ("\nClient Disconnected. Please re-connect.")
                 config.server_socket.shutdown(0)
                 config.server_down = True
                 break
 
-            if verbose: print('\n' + f"Received from client: {data}" + '\n')
+            print('\n' + f"Received from client: {data}" + '\n')
 
     except Exception as e:
         print(f"Client Error: {e}")

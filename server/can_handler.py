@@ -9,7 +9,7 @@ import can
 import time
 import server.config as config
 from ecus.ecm import ECM
-from ecus.bcm import BCM    
+from ecus.bcm import BCM  
 from ecus.dcu import DCU
         
 class CAN_Handler:
@@ -153,3 +153,15 @@ class CAN_Handler:
                 stat_msg = [config.wiper_status, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
             self.send_msg(0x058, stat_msg, is_status=True)
             time.sleep(0.1)
+    
+    def process_client_data(self, data):
+        if "0x0E" in data: #wipers on
+            print("WIPERS ON")
+            config.wiper_status = 0x01
+        elif "0x0F" in data: #wipers off
+            print("WIPERS OFF")
+            config.wiper_status = 0x00
+        elif "0x10" in data: #OTA update attempt
+            print("CHANGE")
+        else:
+            return
