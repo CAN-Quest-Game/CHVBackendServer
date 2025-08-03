@@ -28,8 +28,20 @@ class TCU(ECU):
         #     print("working TCU")
 
         #currently set memory size (amt bytes transferred) to 21h = 33 bytes
-        download_req = cansend.send_msg(self.req_arb_id, [0x34, 0x00, 0x13, 0x43, 0x48, 0x56, 0x21])
-        self.handle_request(download_req, cansend)
+        req_download = [0x34, 0x00, 0x13, 0x43, 0x48, 0x56, 0x21]
+        cansend.send_msg(self.req_arb_id, req_download)
+        msg = '07 ' + ' '.join(f'{byte:02X}' for byte in req_download)
+        print(msg)
+        self.handle_request(msg, cansend)
+       
+        transfer_1 = [0x36, 0x01, ]
+        transfer_2 = [0x36, 0x02]
+        transfer_3 = [0x36, 0x03]
+        cansend.send_msg(self.req_arb_id, transfer_data)
+        
+        req_exit = [0x37]
+        cansend.send_msg(self.req_arb_id, req_exit)
+
        # self.rsp_arb_id()
         #cansend.send_msg(self.req_arb_id, [0x34, 0xDE, 0xAD, 0xBE, 0xEF])
 
@@ -48,24 +60,10 @@ class TCU(ECU):
             cansend.send_msg(self.rsp_arb_id, [0x7F, service_id, 0x13])
             return
 
-        
-        if isinstance(service, DiagnosticSessionControl):
-            self.active_session = service.get_diagnostic_session(payload_bytes)
-            if (verbose): print("Active session is:", self.active_session)
-        rsp = service.construct_msg(payload_bytes)
-        if (verbose): print(rsp)
-        if self.active_session == 0x01:
-            if rsp == [0x7E, 0x01]:
-                if(verbose): print("success yuh")
-                cansend.send_msg(self.rsp_arb_id, rsp)
-                cansend.send_msg(self.rsp_arb_id, [0x66, 0x6C, 0x61, 0x67, 0x7B, 0x75, 0x6D, 0x5F, 0x64, 0x65, 0x61, 0x72, 0x62, 0x6F, 0x72, 0x6E, 0x7D], is_multiframe=True)
-                if config.client_sock:
-                    config.client_sock.sendall("0x00".encode('utf-8'))
-            else:
-                cansend.send_msg(self.rsp_arb_id, rsp)
-
         if isinstance(service, RequestDownload):
             print("TBD")
+            #change to respond to B as 3 blocks of 11 bytes
+            cansend.send_msg(self.rsp_arb_id, [0x74, 0x10, 0x0B])
 
         else:
             cansend.send_msg(self.rsp_arb_id, rsp)

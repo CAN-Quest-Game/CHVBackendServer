@@ -339,7 +339,7 @@ class RequestDownload(UDS_Service):
         self.nrc = None
 
     def validate_length(self, dlc, payload):
-        if (int(dlc) != (len(payload) - 2)) or (len(payload) < 5):
+        if (int(dlc) != (len(payload) - 1)) or (len(payload) < 5):
             return False
         else:
             return True
