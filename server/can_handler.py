@@ -83,7 +83,7 @@ class CAN_Handler:
             #break into frames of 7 bytes (+1 for DLC)
             frame_size = 7
             num_frames = (len(updated_data)  + (frame_size - 1)) // frame_size
-            btf_sequences = [0x10, 0x21, 0x22, 0x23, 0x24, 0x25]
+            btf_sequences = [0x10, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27]
             for f in range(0, num_frames):
                 btf = btf_sequences[f]
                 frame = updated_data[f*frame_size:(f+1)*frame_size]
