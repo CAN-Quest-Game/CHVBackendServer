@@ -326,3 +326,69 @@ class SecurityAccess(UDS_Service):
         return [0x7F, self.service_id, self.nrc]
 
     
+# class RequestDownload(UDS_Service):
+#     def __init__(self):
+#         self.service_id = 0x34
+#         self.nrc = None
+#         self.subfunction_id = None
+
+class RequestDownload(UDS_Service):
+    '''Concrete implementation of the UDS service for Read Memory By Address.'''
+    def __init__(self):
+        self.service_id = 0x23
+        self.nrc = None
+
+    def validate_length(self, dlc, payload):
+        if (int(dlc) != (len(payload) - 2)) or (len(payload) < 5):
+            return False
+        else:
+            return True
+
+    def addressAndLengthFormatValidation(self, payload):
+        '''Check if the address and length format is correct. Check ISO 14229-1 for details, not 100% sure if this is correct implementation.'''
+        #add second nibble check for 05 - i forgot what that means lol
+        #shouldn't it be 14 lol i am so confused
+        #TODO add logic for mem size check
+        mem_size = []
+        addressAndLengthFormatIdentifier = hex(int(payload[2], 16))
+        mem_address = payload[3:5]
+        mem_size = payload[5:6]
+        nibble1 = addressAndLengthFormatIdentifier[2]
+        nibble2 = addressAndLengthFormatIdentifier[3]
+        if int(nibble1) != len(mem_address) or int(nibble2) != len(mem_size):
+            return False
+        else:
+            return True
+
+    def subfunction(self, payload):
+        mem_address = hex(int(''.join(payload[3:5]), 16)) #parse the address
+        valid_mem_address_range = (0x0000, 0xFFFF) #check if address is in range
+        if valid_mem_address_range[0] <= int(mem_address, 16) <= valid_mem_address_range[1]:
+            return True
+        else:
+            return False
+
+    def construct_msg(self, payload, special_case=True, key=None):
+        dlc = payload[0]
+        addr_len_check = self.addressAndLengthFormatValidation(payload)
+        subfunc_check = self.subfunction(payload)
+        length_check = self.validate_length(dlc, payload)
+        if length_check and addr_len_check and subfunc_check:
+            response = self.positive_response()
+            return response
+        elif length_check == False:
+            self.nrc = 0x13 #Invalid length or format
+            return self.negative_response()
+        elif addr_len_check == False or addr_len_check == False:
+            self.nrc = 0x31 #Request out of range specific for mem address
+            return self.negative_response()
+        else:
+            self.nrc = 0x22 #Conditions not correct otherwise
+            return self.negative_response()
+
+    def positive_response(self):
+        return [self.service_id+0x40]
+
+    def negative_response(self):
+        return [0x7F, self.service_id, self.nrc]
+    

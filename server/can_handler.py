@@ -11,6 +11,7 @@ import server.config as config
 from ecus.ecm import ECM
 from ecus.bcm import BCM  
 from ecus.dcu import DCU
+from ecus.tcu import TCU
         
 class CAN_Handler:
     '''Class to handle CANbus initialization, message sending and recieving, ECU additions. Creates instance of type can_handler.'''
@@ -130,8 +131,11 @@ class CAN_Handler:
         ecu_dict = {
                 0x123: ['ECM', 0x321], 
                 0x456: ['BCM', 0x654], 
-                0x789: ['DCU', 0x7FF]
+                0x789: ['DCU', 0x7FF],
+                0x7A8: ['TCU', 0x7B0]
                 }
+                #tcu will be 7A0/7A8 or 7A8/7B0 pair (fun twist on 1960 from flintstones)
+
         
         #TODO: add your own ECU initialization here, make sure to import custom class at the top as well
         for req_arb_id, (name, rsp_arb_id) in ecu_dict.items():
@@ -141,6 +145,8 @@ class CAN_Handler:
                 self.ecus[req_arb_id] = BCM(name, req_arb_id, rsp_arb_id, verbose=config.verbose)
             elif name == "DCU":
                 self.ecus[req_arb_id] = DCU(name, req_arb_id, rsp_arb_id, verbose=config.verbose)
+            elif name == "TCU":
+                self.ecus[req_arb_id] = TCU(name, req_arb_id, rsp_arb_id, verbose=config.verbose)
     
     def get_ecu(self,arb_id):
         '''Helper function to return request arbitration ID of the ECU.'''
@@ -153,6 +159,21 @@ class CAN_Handler:
                 stat_msg = [config.wiper_status, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
             self.send_msg(0x058, stat_msg, is_status=True)
             time.sleep(0.1)
+        
+    def broadcast_tcu_data(self):
+        current_time = (int(time.time() - config.start_time))
+        timestamp = current_time.to_bytes(2, 'big')
+        print(current_time)
+        tcu_msg = [config.ota_flash_attempts, config.ota_flash_status, 0xCC, 0xCC, timestamp[0], timestamp[1]]
+        #stat msg: ID # flash attempt result (success/fail), # flash attempt (ctr), maybe sub-code/crc check???, timestamp
+        self.send_msg(0x333, tcu_msg, is_status=True)
+    
+    def send_uds_ota(self):
+        TCU = self.get_ecu(0x7A8)
+        print(TCU.req_arb_id)
+        print(TCU.rsp_arb_id)
+        TCU.send_ota_data(self)
+
     
     def process_client_data(self, data):
         if "0x0E" in data: #wipers on
@@ -162,6 +183,19 @@ class CAN_Handler:
             print("WIPERS OFF")
             config.wiper_status = 0x00
         elif "0x10" in data: #OTA update attempt
-            print("CHANGE")
+            #should I continuously broadcast this or nah?????????????
+            #0x00 = regular???, 0x01 = fail, 0x02 = in progress, 0x03 = success
+            config.ota_flash_attempts += 1
+            config.ota_flash_status = 0x02
+            self.broadcast_tcu_data()
+            self.send_uds_ota()
+            #TCU.send_ota_data(cansend=self)
+            time.sleep(1)
+            print("Flash attempt ctr: ", config.ota_flash_attempts)
+            config.ota_flash_status = 0x01
+            config.client_sock.sendall("0x13".encode('utf-8'))
+            self.broadcast_tcu_data()
+            #print(config.ota_flash_status)
+            #print("first need to send flash sequence messages over TCU & change status update message (which consists of flash attempt result - this needs to be the LOCK!!!!, flash sub-code OR crc check - passed in, timestamp - calc)")
         else:
             return

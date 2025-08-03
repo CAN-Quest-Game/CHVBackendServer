@@ -14,6 +14,10 @@ while True:
 
         if "0x00" in data:
             socketClient.send("recv_test".encode())
+            socketClient.send("0x10".encode())
+
+        if "0x13" in data:
+            print("OTA UNSUCCESSFUL")
 
         if "-1" in data:
             break
