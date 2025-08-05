@@ -325,45 +325,38 @@ class SecurityAccess(UDS_Service):
     def negative_response(self):
         return [0x7F, self.service_id, self.nrc]
 
-    
-# class RequestDownload(UDS_Service):
-#     def __init__(self):
-#         self.service_id = 0x34
-#         self.nrc = None
-#         self.subfunction_id = None
-
 class RequestDownload(UDS_Service):
-    '''Concrete implementation of the UDS service for Read Memory By Address.'''
+    '''Concrete implementation of the UDS service for Request Download.'''
     def __init__(self):
-        self.service_id = 0x23
+        self.service_id = 0x34
         self.nrc = None
+        self.len_size = 0x10
+        self.total_transfer_size = 0x00
 
     def validate_length(self, dlc, payload):
-        if (int(dlc) != (len(payload) - 1)) or (len(payload) < 5):
+        if (int(dlc) != (len(payload) - 2)) or (len(payload) < 5):
             return False
         else:
             return True
 
     def addressAndLengthFormatValidation(self, payload):
         '''Check if the address and length format is correct. Check ISO 14229-1 for details, not 100% sure if this is correct implementation.'''
-        #add second nibble check for 05 - i forgot what that means lol
-        #shouldn't it be 14 lol i am so confused
-        #TODO add logic for mem size check
         mem_size = []
-        addressAndLengthFormatIdentifier = hex(int(payload[2], 16))
-        mem_address = payload[3:5]
-        mem_size = payload[5:6]
+        addressAndLengthFormatIdentifier = hex(int(payload[3], 16))
+        mem_address = payload[4:7]
+        mem_size = payload[7:8]
         nibble1 = addressAndLengthFormatIdentifier[2]
         nibble2 = addressAndLengthFormatIdentifier[3]
-        if int(nibble1) != len(mem_address) or int(nibble2) != len(mem_size):
+        if int(nibble1) != len(mem_size) or int(nibble2) != len(mem_address):
             return False
         else:
             return True
 
+    #custom for CHV DEFCON 33
     def subfunction(self, payload):
-        mem_address = hex(int(''.join(payload[3:5]), 16)) #parse the address
-        valid_mem_address_range = (0x0000, 0xFFFF) #check if address is in range
-        if valid_mem_address_range[0] <= int(mem_address, 16) <= valid_mem_address_range[1]:
+        mem_address = int(''.join(payload[4:7]), 16) #parse the address
+        #valid_mem_address_range = (0x000000, 0xFFFFFF) #check if address is in range
+        if mem_address == 0x434856:
             return True
         else:
             return False
@@ -373,6 +366,8 @@ class RequestDownload(UDS_Service):
         addr_len_check = self.addressAndLengthFormatValidation(payload)
         subfunc_check = self.subfunction(payload)
         length_check = self.validate_length(dlc, payload)
+
+        self.total_transfer_size = int(payload[7], 16)
         if length_check and addr_len_check and subfunc_check:
             response = self.positive_response()
             return response
@@ -387,8 +382,22 @@ class RequestDownload(UDS_Service):
             return self.negative_response()
 
     def positive_response(self):
-        return [self.service_id+0x40]
+        return [self.service_id+0x40, 0x10, self.total_transfer_size]
 
     def negative_response(self):
         return [0x7F, self.service_id, self.nrc]
     
+class TransferData(UDS_Service):
+    '''Concrete implementation of the UDS service for Request Download.'''
+    def __init__(self):
+        self.service_id = 0x36
+        self.nrc = None
+        self.sequence_number = 0x00
+        #self.len_size = 0x10
+        #self.total_transfer_size = RequestDownload.total_transfer_size
+    
+    def validate_length(self, dlc, payload):
+        if (int(dlc) != (len(payload) - 2)) or (len(payload) < 5):
+            return False
+        else:
+            return True

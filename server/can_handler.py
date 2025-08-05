@@ -93,12 +93,29 @@ class CAN_Handler:
                 if (self.verbose): print(f"Sent message: {message}")
         except can.CanError:
             print("MESSAGE NOT SENT")
+    
+    def handle_multiframe_msg(self, first_msg):
+        total_len = first_msg.data[1]
+        payload = list(first_msg.data[2:])
+        while len(payload) < total_len:
+            next_msg = self.bus.recv()
+            if next_msg.arbitration_id != first_msg.arbitration_id:
+                continue
+            if next_msg.data[0] >> 4 == 0x2:
+                print("ayo")
+                payload.extend(next_msg.data[1:])
+
+
+        
 
     def recv_msg(self):
         '''Function to recieve a message on the CANbus. Actively listens through initialization.'''
         try:
             message = self.bus.recv()
             if (self.verbose): print(f"Received message: {message}")
+            if message.data[0] == 0x10:
+                print("handling multiframe...")
+                complete_payload = self.handle_multiframe_msg(message)
             #parse the message and extract the payload
             parsed = '{0:f} {1:x} {2:x} '.format(message.timestamp, message.arbitration_id, message.dlc)
             payload = ''
@@ -189,7 +206,6 @@ class CAN_Handler:
             config.ota_flash_status = 0x02
             self.broadcast_tcu_data()
             self.send_uds_ota()
-            #TCU.send_ota_data(cansend=self)
             time.sleep(1)
             print("Flash attempt ctr: ", config.ota_flash_attempts)
             config.ota_flash_status = 0x01

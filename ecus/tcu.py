@@ -6,6 +6,7 @@ Description: Custom Telematics Control Module (TCU) class used for CHV. Inherits
 '''
 import re
 import time
+import binascii
 from .ecu import ECU
 from services.uds_services import *
 import server.config as config
@@ -13,80 +14,69 @@ import server.config as config
 class TCU(ECU):
     def __init__(self, name, req_arb_id, rsp_arb_id, verbose=config.verbose):
         super().__init__(name, req_arb_id, rsp_arb_id, verbose=config.verbose)
+        self.req_download_complete = False
+        self.sequence = 0x00
 
     def initialize_services(self):
         return {
             0x10: DiagnosticSessionControl(),
-            0x3E: TesterPresent(),
-            0x34: RequestDownload()
+            0x34: RequestDownload(),
+            #0x36: TransferData(),
+            #0x37: RequestTransferExit()
         }
+
 
     def send_ota_data(self, cansend):
         #send 0x34, 0x36
         # if config.ota_flash_status == 0x02:
         #     print("working TCU")
 
-        #change to alt
-        #currently set memory size (amt bytes transferred) to C8 = 200 bytes
-        req_download = [0x34, 0x00, 0x13, 0x43, 0x48, 0x56, 0xC8]
+        #CORRUPTPAYLOAD: 53 4F 46 54 57 41 52 45 2D 55 50 44 41 54 45 3A 20 59 61 62 62 61 2D 64 61 62 62 79 2D 64 6F 6F 21
+        #EXPECTEDPAYLOAD: 53 4F 46 54 57 41 52 45 2D 55 50 44 41 54 45 3A 20 59 61 62 62 61 2D 64 61 62 62 61 2D 64 6F 6F 21
+
+        #start programming session
+        cansend.send_msg(self.req_arb_id, [0x10, 0x02])
+        cansend.send_msg(self.rsp_arb_id, [0x50, 0x02])
+
+        #request download
+        #currently set memory size (amt bytes transferred) to 2E = 46 bytes, 3 chunks of 11 (0Bh)
+        req_download = [0x34, 0x00, 0x13, 0x43, 0x48, 0x56, 0x2E]
         cansend.send_msg(self.req_arb_id, req_download)
-        msg = '07 ' + ' '.join(f'{byte:02X}' for byte in req_download)
-        print(msg)
-        self.handle_request(msg, cansend)
-        header = [0x36, 0x01] #add header
-        transfer_1 = [
-            0x36, 0x02, 0x55, 0x50, 0x44, 0x41, 0x54, 0x49, 
-            0x4E, 0x47, 0x0A, 0x59, 0x61, 0x62, 0x62, 0x61, 
-            0x2D, 0x64, 0x61, 0x62, 0x62, 0x61, 0x2D, 0x64, 
-            0x6F, 0x6F, 0x21, 0x0A, 0x46, 0x6C, 0x69, 0x6E, 
-            0x74, 0x73, 0x74, 0x6F, 0x6E, 0x65, 0x73,0x2C, 0x20]
-        transfer_2 = [
-            0x36, 0x03, 0x6D, 0x65, 0x65, 0x74, 0x20, 0x74,
-            0x68, 0x65, 0x20, 0x46, 0x6C, 0x69, 0x6E, 0x74,
-            0x73, 0x74, 0x6F, 0x6E, 0x65, 0x73, 0x0A, 0x54,
-            0x68, 0x65, 0x79, 0x27, 0x72, 0x65, 0x20, 0x74, 
-            0x68, 0x65, 0x20, 0x6D, 0x6F, 0x64, 0x65, 0x72, 
-            0x6E, 0x20]
-        transfer_3 = [
-            0x36, 0x04, 0x73, 0x74, 0x6F, 0x6E, 0x65, 0x2D,
-            0x61, 0x67, 0x65, 0x20, 0x66, 0x61, 0x6D, 0x69, 
-            0x6C, 0x79, 0x0A, 0x46, 0x72, 0x6F, 0x6D, 0x20, 
-            0x74, 0x68, 0x65, 0x20, 0x74, 0x6F, 0x77, 0x6E,
-            0x20, 0x6F, 0x66, 0x20, 0x42, 0x65, 0x64, 0x72,
-            0x6F, 0x63]
-        transfer_4 = [
-            0x36, 0x05, 0x6B, 0x0A, 0x54, 0x68, 0x65, 0x79,
-            0x27, 0x72, 0x65, 0x20, 0x61, 0x20, 0x70, 0x61,
-            0x67, 0x65, 0x20, 0x72, 0x69, 0x67, 0x68, 0x74,
-            0x20, 0x6F, 0x75, 0x74, 0x20, 0x6F, 0x66, 0x20, 
-            0x68, 0x69, 0x73, 0x74, 0x6F, 0x72, 0x79, 0x0A, 
-            0x4C, 0x65] 
-        transfer_5 = [
-            0x36, 0x06, 0x74, 0x27, 0x73, 0x20, 0x72, 0x69,
-            0x64, 0x65, 0x20, 0x77, 0x69, 0x74, 0x68, 0x20,
-            0x74, 0x68, 0x65, 0x20, 0x66, 0x61, 0x6D, 0x69,
-            0x6C, 0x79, 0x20, 0x64, 0x6F, 0x77, 0x6E, 0x20,
-            0x74, 0x68, 0x65, 0x20, 0x73, 0x74, 0x72, 0x65, 
-            0x65, 0x74]
-        crc = [0x36, 0x07] #add crc
-        # cansend.send_msg(self.req_arb_id, transfer_1, is_multiframe=True)
-        # cansend.send_msg(self.req_arb_id, transfer_2, is_multiframe=True)
-        # cansend.send_msg(self.req_arb_id, transfer_3, is_multiframe=True)
-        # cansend.send_msg(self.req_arb_id, transfer_4, is_multiframe=True)
-        # cansend.send_msg(self.req_arb_id, transfer_5, is_multiframe=True)
+        cansend.send_msg(self.rsp_arb_id, [0x74, 0x10, 0x0B])
 
-        #alt transfer, figure out whether to corrupt payload OR corrupt header (both will affect CRC)
-        alt_1 = [0x36, 0x02, 0x53, 0x4F, 0x46, 0x54, 0x57, 0x41, 0x52, 0x45, 0x20, 0x55, 0x50, 0x44]
-        alt_2 = [0x36, 0x03, 0x41, 0x54, 0x45, 0x2E, 0x2E, 0x2E, 0x0A, 0x0A, 0x59, 0x61, 0x62, 0x62]
-        alt_3 = [0x36, 0x04, 0x61, 0x2D, 0x64, 0x61, 0x62, 0x62, 0x61, 0x2D, 0x64, 0x6F, 0x6F, 0x21]
-        cansend.send_msg(self.req_arb_id, alt_1, is_multiframe=True)
-        cansend.send_msg(self.req_arb_id, alt_2, is_multiframe=True)
-        cansend.send_msg(self.req_arb_id, alt_3, is_multiframe=True)
+        #define OTA
+        header = [0x36, 0x01, 0x48, 0x45, 0x41, 0x44, 0x03, 0x00, 0x21, 0x07, 0xD0]
+       # header = magic # (4), version (1), payload size (2) - 21h bytes = 33d, target ecu id(2), 
+       #ECU ID FOR radio = 7D0 (2000s flintstone movie came out!!)
+        b1 = [0x36, 0x02, 0x53, 0x4F, 0x46, 0x54, 0x57, 0x41, 0x52, 0x45, 0x2D, 0x55, 0x50]
+        b2 = [0x36, 0x03, 0x44, 0x41, 0x54, 0x45, 0x3A, 0x20, 0x59, 0x61, 0x62, 0x62, 0x61]
+        b3 = [0x36, 0x04, 0x2D, 0x64, 0x61, 0x62, 0x62, 0x79, 0x2D, 0x64, 0x6F, 0x6F, 0x21]
+        crc = [0x36, 0x05, 0x9E, 0x14, 0x19, 0x7C]
 
+        #transfer data
+        cansend.send_msg(self.req_arb_id, header, is_multiframe=True)
+        cansend.send_msg(self.rsp_arb_id, [0x76, 0x01])
+        cansend.send_msg(self.req_arb_id, b1, is_multiframe=True)
+        cansend.send_msg(self.rsp_arb_id, [0x76, 0x02])
+        cansend.send_msg(self.req_arb_id, b2, is_multiframe=True)
+        cansend.send_msg(self.rsp_arb_id, [0x76, 0x03])
+        cansend.send_msg(self.req_arb_id, b3, is_multiframe=True)
+        cansend.send_msg(self.rsp_arb_id, [0x76, 0x04])
+        cansend.send_msg(self.req_arb_id, crc)
+        cansend.send_msg(self.rsp_arb_id, [0x76, 0x05])
 
+        #TODO:use elsewhere
+        pay=bytes(b1[2:]+b2[2:]+b3[2:])
+        print(pay)
+        crc32 = binascii.crc32(pay) & 0xFFFFFFFF  # Ensure unsigned 32-bit result
+        # Show as hex
+        print("Expected CRC: 0x7191998A")
+        print(f"Recieved CRC32: {crc32:#010x}")
+
+        #request transfer exit
         req_exit = [0x37]
         cansend.send_msg(self.req_arb_id, req_exit)
-
+        cansend.send_msg(self.rsp_arb_id, [0x7F, 0x37, 0x72])
 
     def handle_request(self, payload, cansend, verbose=False):
         if (verbose): print(len(payload))
@@ -102,11 +92,28 @@ class TCU(ECU):
         elif service.validate_length(dlc, payload_bytes) is False:
             cansend.send_msg(self.rsp_arb_id, [0x7F, service_id, 0x13])
             return
-
-        if isinstance(service, RequestDownload):
-            print("TBD")
-            #change to respond to 28h as 5 blocks of 40 bytes
-            cansend.send_msg(self.rsp_arb_id, [0x74, 0x10, 0x28])
-
+        if isinstance(service, DiagnosticSessionControl):
+            self.active_session = service.get_diagnostic_session(payload_bytes, trigger=True)
+            if (verbose): print("Active session is:", self.active_session)
+        rsp = service.construct_msg(payload_bytes, special_case=True)
+        if (verbose): print(rsp)
+        if self.active_session == 0x02 or isinstance(service, DiagnosticSessionControl):
+            if rsp == [0x74, 0x10, 0x2E]:
+                if (verbose): print("success yuh")
+                cansend.send_msg(self.rsp_arb_id, rsp)
+                self.req_download_complete = True
+            elif isinstance(service, TransferData):
+                if self.req_download_complete == True:
+                    if response == [0x76, service.sequence_number]:
+                        print("yuhhhhh")
+                    else:
+                        cansend.send_msg(self.rsp_arb_id, rsp)
+                else:
+                    cansend.send_msg(self.rsp_arb_id, [0x7F, service_id, 0x24])
+            else:
+                cansend.send_msg(self.rsp_arb_id, rsp)
         else:
-            cansend.send_msg(self.rsp_arb_id, rsp)
+            cansend.send_msg(self.rsp_arb_id, [0x7F, service_id, 0x7F])
+
+        # else:
+        #     cansend.send_msg(self.rsp_arb_id, rsp)
