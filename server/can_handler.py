@@ -97,16 +97,23 @@ class CAN_Handler:
     def handle_multiframe_msg(self, first_msg):
         total_len = first_msg.data[1]
         payload = list(first_msg.data[2:])
+        expected_sn = 1
         while len(payload) < total_len:
-            next_msg = self.bus.recv()
+            next_msg = self.bus.recv(timeout=30.0)
+            if next_msg is None:
+                print('Timeout while waiting for consecutive frame. Try again...')
+                self.bus.send(can.Message(arbitration_id=first_msg.arbitration_id+8, data=[0x7F, first_msg.data[2], 0x22], is_extended_id=False))
+                return
             if next_msg.arbitration_id != first_msg.arbitration_id:
                 continue
-            if next_msg.data[0] >> 4 == 0x2:
-                print("ayo")
-                payload.extend(next_msg.data[1:])
-
-
-        
+            sn = next_msg.data[0] & 0x0F
+            if next_msg.data[0] >> 4 != 0x2 or sn != expected_sn:
+                print("Unexpected Sequence Number Error. Resend.")
+                self.bus.send(can.Message(arbitration_id=first_msg.arbitration_id+8, data=[0x7F, first_msg.data[2], 0x22], is_extended_id=False))
+                return
+            payload.extend(next_msg.data[1:])
+            expected_sn = (expected_sn+1)%16
+        return ' '.join(f'{byte:02x}' for byte in payload[:total_len])
 
     def recv_msg(self):
         '''Function to recieve a message on the CANbus. Actively listens through initialization.'''
@@ -115,20 +122,32 @@ class CAN_Handler:
             if (self.verbose): print(f"Received message: {message}")
             if message.data[0] == 0x10:
                 print("handling multiframe...")
+                #maybe add flow control later
+                self.bus.send(can.Message(arbitration_id=message.arbitration_id+8, data=[0x30, 0x00, 0x00], is_extended_id=False))
                 complete_payload = self.handle_multiframe_msg(message)
-            #parse the message and extract the payload
-            parsed = '{0:f} {1:x} {2:x} '.format(message.timestamp, message.arbitration_id, message.dlc)
-            payload = ''
-            for i in range(message.dlc):
-                payload += '{:02x} '.format(message.data[i])
-
-            #map the ecu based on the TX arbitration ID (request)
-            ecu = self.get_ecu(message.arbitration_id)
-            if ecu:
-                ecu.handle_request(payload, self)
+                if complete_payload is not None:
+                    ecu = self.get_ecu(message.arbitration_id)
+                    if ecu:
+                        ecu.handle_request(complete_payload, self, multiframe=True)
+                    else:
+                        if (self.verbose): print("ECU not found")
+                        return
+                return message, complete_payload
             else:
-                if (self.verbose): print("ECU not found")
-            return message, payload
+                #parse the message and extract the payload
+                parsed = '{0:f} {1:x} {2:x} '.format(message.timestamp, message.arbitration_id, message.dlc)
+                payload = ''
+                for i in range(message.dlc):
+                    payload += '{:02x} '.format(message.data[i])
+
+                #map the ecu based on the TX arbitration ID (request)
+                ecu = self.get_ecu(message.arbitration_id)
+                if ecu:
+                    ecu.handle_request(payload, self)
+                else:
+                    if (self.verbose): print("ECU not found")
+                    return
+                return message, payload
         
         except can.CanError:
             print("MESSAGE NOT RECEIVED")
