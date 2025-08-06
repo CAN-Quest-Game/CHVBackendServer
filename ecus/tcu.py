@@ -128,6 +128,8 @@ class TCU(ECU):
                             cansend.send_msg(self.rsp_arb_id, rsp)
                             config.ota_flash_attempts += 1
                             config.ota_flash_status = 0x03
+                            config.ota_complete = True
+                            cansend._init_ivi()
                             cansend.broadcast_tcu_data()
                             if config.client_sock:
                                 config.client_sock.sendall("0x12".encode('utf-8'))
@@ -139,7 +141,7 @@ class TCU(ECU):
                         config.ota_flash_status = 0x01
                         cansend.broadcast_tcu_data()
                         if config.client_sock:
-                            config.client_sock.sendall("0x12".encode('utf-8'))
+                            config.client_sock.sendall("0x13".encode('utf-8'))
 
                 else:
                     cansend.send_msg(self.rsp_arb_id, [0x7F, service_id, 0x24])

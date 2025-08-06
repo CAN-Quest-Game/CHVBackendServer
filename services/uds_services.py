@@ -284,6 +284,8 @@ class SecurityAccess(UDS_Service):
     def check_key(self, payload, stored_key):
         '''Checking if key entered by user matches key calculated by ECU server...'''
         key = []
+        if len(payload) < 6:
+            return False
         for i in range(3,6):
             key.append(int(payload[i], 16))
         if key == stored_key:
@@ -504,6 +506,89 @@ class RequestTransferExit(UDS_Service):
     
     def positive_response(self):
         return [self.service_id+0x40]
+
+    def negative_response(self):
+        return [0x7F, self.service_id, self.nrc]
+
+class WriteMemoryByAddress(UDS_Service):
+    '''Concrete implementation of the UDS service for Write Memory By Address.'''
+    def __init__(self):
+        self.service_id = 0x3D
+        self.nrc = None
+        self.mem_address = None
+        self.mem_size = None
+        self.addressAndLengthFormatIdentifier = None
+
+    def validate_length(self, dlc, payload):
+        if (int(dlc) != (len(payload) - 2)) or (len(payload) < 5):
+            return False
+        else:
+            return True
+
+    def addressAndLengthFormatValidation(self, payload):
+        '''Check if the address and length format is correct. Check ISO 14229-1 for details, not 100% sure if this is correct implementation.'''
+        #add second nibble check for 05 - i forgot what that means lol
+        #shouldn't it be 14 lol i am so confused
+        #TODO add logic for mem size check
+        #mem_size = []
+        self.addressAndLengthFormatIdentifier = int(payload[2], 16)
+        addressAndLengthFormatIdentifier = hex(int(payload[2], 16))
+        mem_address = payload[3:6]
+        self.mem_address = [int(mem_address[0], 16), int(mem_address[1], 16), int(mem_address[2], 16)]
+        mem_size = payload[6:7]
+        data = payload[7:8]
+        self.mem_size = int(mem_size[0], 16)
+        if (len(data)) != int(mem_size[0]):
+            return False
+        nibble1 = addressAndLengthFormatIdentifier[2]
+        nibble2 = addressAndLengthFormatIdentifier[3]
+        if int(nibble1) != len(mem_size) or int(nibble2) != len(mem_address):
+            return False
+        else:
+            return True
+
+    #07 3D 12 11 22 33 01 41 (65 years) 
+    #custom for CHV
+    def subfunction(self, payload):
+        mem_address = hex(int(''.join(payload[3:6]), 16)) #parse the address
+        valid_mem_address_range = 0x574253 #check if address is in range
+        if valid_mem_address_range == int(mem_address, 16):
+            return True
+        else:
+            return False
+
+    #specific for CHV
+    def data_valid(self, payload):
+        write_data = payload[7]
+        if int(write_data, 16) != 0x41:
+            return False
+        else:
+            return True
+
+    def construct_msg(self, payload, special_case=True, key=None):
+        dlc = payload[0]
+        addr_len_check = self.addressAndLengthFormatValidation(payload)
+        subfunc_check = self.subfunction(payload)
+        length_check = self.validate_length(dlc, payload)
+        data_check = self.data_valid(payload)
+        if length_check and addr_len_check and subfunc_check and data_check:
+            response = self.positive_response()
+            return response
+        elif length_check == False:
+            self.nrc = 0x13 #Invalid length or format
+            return self.negative_response()
+        elif subfunc_check == False or addr_len_check == False:
+            self.nrc = 0x31 #Request out of range specific for mem address
+            return self.negative_response()
+        elif data_check == False:
+            self.nrc = 0x72
+            return self.negative_response()
+        else:
+            self.nrc = 0x22 #Conditions not correct otherwise
+            return self.negative_response()
+
+    def positive_response(self):
+        return [self.service_id+0x40, self.addressAndLengthFormatIdentifier, self.mem_address[0], self.mem_address[1], self.mem_address[2], self.mem_size]
 
     def negative_response(self):
         return [0x7F, self.service_id, self.nrc]

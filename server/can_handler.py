@@ -12,6 +12,7 @@ from ecus.ecm import ECM
 from ecus.bcm import BCM  
 from ecus.dcu import DCU
 from ecus.tcu import TCU
+from ecus.ivi import IVI
         
 class CAN_Handler:
     '''Class to handle CANbus initialization, message sending and recieving, ECU additions. Creates instance of type can_handler.'''
@@ -168,7 +169,8 @@ class CAN_Handler:
                 0x123: ['ECM', 0x321], 
                 0x456: ['BCM', 0x654], 
                 0x789: ['DCU', 0x7FF],
-                0x7A8: ['TCU', 0x7B0]
+                0x7A8: ['TCU', 0x7B0],
+                0x7D0: ['IVI', 0x7D8]
                 }
                 #tcu will be 7A0/7A8 or 7A8/7B0 pair (fun twist on 1960 from flintstones)
 
@@ -183,6 +185,13 @@ class CAN_Handler:
                 self.ecus[req_arb_id] = DCU(name, req_arb_id, rsp_arb_id, verbose=config.verbose)
             elif name == "TCU":
                 self.ecus[req_arb_id] = TCU(name, req_arb_id, rsp_arb_id, verbose=config.verbose)
+
+    def _init_ivi(self):
+        if config.ota_complete == True and 0x7D0 not in self.ecus:
+            print("initializing IVI\n")
+            self.ecus[0x7D0] = IVI(IVI, 0x7D0, 0x7D8, verbose=config.verbose)
+            self.broadcast_ivi_boot(is_init=True)
+
     
     def get_ecu(self,arb_id):
         '''Helper function to return request arbitration ID of the ECU.'''
@@ -204,12 +213,31 @@ class CAN_Handler:
         #stat msg: ID # flash attempt result (success/fail), # flash attempt (ctr), maybe sub-code/crc check???, timestamp
         self.send_msg(0x333, tcu_msg, is_status=True)
     
+    def broadcast_ivi_boot(self, is_init=False):
+        IVI = self.get_ecu(0x7D0)
+        time_since_boot = int(time.time() - IVI.boot_time)
+        timestamp = time_since_boot.to_bytes(2, 'big')
+        full_msg = b''
+        if is_init: full_msg += b'OTA FLASH SUCCESS\n'
+        if is_init: full_msg += b'-----FLINTFOTAINMENT SYSTEM BOOT-----\n'
+        if is_init: full_msg += b'DEBUG MODE AVAILABLE WITH EXTENDED, INITIALIZING AT 0x7D0...\n'
+        if IVI.debug: full_msg += b'ENTERING DEBUG MODE....'
+        if IVI.algo: full_msg += b'LOADING XOR/0x5555 LROT/3 ALGORITHM...\n'
+        if IVI.mem: full_msg += b'PARSING CONFIGURABLE MEMORY 0x574253...\n'
+        if IVI.boot_stat: full_msg += b'-----BOOT COMPLETE!-----'
+        if IVI.boot_stat: full_msg+= b'flag{fl1ntst0n3s_1n_f3d0r@s}'
+        chunks = [full_msg[i:i+5] for i in range(0, len(full_msg), 5)]
+
+        for index, chunk in enumerate(chunks):
+            data = list(timestamp) + [index] + list(chunk)
+            #data += [0x00] * (8 - len(data))
+            self.send_msg(0x313, data, is_status=True)
+    
     def send_uds_ota(self):
         TCU = self.get_ecu(0x7A8)
         print(TCU.req_arb_id)
         print(TCU.rsp_arb_id)
         TCU.send_ota_data(self)
-
     
     def process_client_data(self, data):
         if "0x0E" in data: #wipers on
@@ -219,7 +247,6 @@ class CAN_Handler:
             print("WIPERS OFF")
             config.wiper_status = 0x00
         elif "0x10" in data: #OTA update attempt
-            #should I continuously broadcast this or nah?????????????
             #0x00 = regular???, 0x01 = fail, 0x02 = in progress, 0x03 = success
             config.ota_flash_attempts += 1
             config.ota_flash_status = 0x02
@@ -230,7 +257,5 @@ class CAN_Handler:
             config.ota_flash_status = 0x01
             config.client_sock.sendall("0x13".encode('utf-8'))
             self.broadcast_tcu_data()
-            #print(config.ota_flash_status)
-            #print("first need to send flash sequence messages over TCU & change status update message (which consists of flash attempt result - this needs to be the LOCK!!!!, flash sub-code OR crc check - passed in, timestamp - calc)")
         else:
             return

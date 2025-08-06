@@ -18,3 +18,4 @@ server_down = False
 ota_flash_status = 0x00
 ota_flash_attempts = 0x00
 start_time = time.time()
+ota_complete = False
