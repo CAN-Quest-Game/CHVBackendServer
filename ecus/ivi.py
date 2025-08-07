@@ -24,7 +24,12 @@ class IVI(ECU):
         self.algo = False
         self.mem = False
         self.boot_stat = False
-        self.flags = set()
+        self.flags = {
+            'debug': False,
+            'algo': False,
+            'mem': False,
+            'stat': False
+        }
 
     def initialize_services(self):
         return {

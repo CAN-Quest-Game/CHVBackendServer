@@ -225,25 +225,24 @@ class CAN_Handler:
         time_since_boot = int(time.time() - IVI.boot_time)
         timestamp = time_since_boot.to_bytes(2, 'big')
         full_msg = b''
-        if is_init and 'init' not in IVI.flags:
+        if is_init:
             full_msg += b'OTA FLASH SUCCESS\n'
             full_msg += b'-----FLINTFOTAINMENT SYSTEM BOOT-----\n'
             full_msg += b'DEBUG MODE AVAILABLE WITH EXTENDED, INITIALIZING AT 0x7D0...\n'
-            IVI.flags.add('init')
-        if IVI.debug != 'debug' not in IVI.flags:
+        if IVI.debug != IVI.flags['debug']:
             full_msg += b'ENTERING DEBUG MODE....'
-            IVI.flags.add('debug')
-        if IVI.algo and 'algo' not in IVI.flags: 
+            IVI.flags['debug'] = IVI.debug
+        if IVI.algo != IVI.flags['algo']: 
             full_msg += b'LOADING XOR ALGORITHM...\n'
-            IVI.flags.add('algo')
-        if IVI.mem and 'mem' not in IVI.flags: 
+            IVI.flags['algo'] = IVI.algo
+        if IVI.mem != IVI.flags['mem']: 
             full_msg += b'PARSING CONFIGURABLE MEMORY 0x574253...\n'
             full_msg += b'WRITE CONDITION = NUM(YEARS_CURRENT) - NUM(YEARS_FLINTSTONES)...\n'
-            IVI.flags.add('mem')
-        if IVI.boot_stat and 'stat' not in IVI.flags: 
+            IVI.flags['mem'] = IVI.mem
+        if IVI.boot_stat != IVI.flags['stat']: 
             full_msg += b'-----BOOT COMPLETE!-----'
             full_msg+= b'flag{fl1ntst0n3s_1n_f3d0r@s}'
-            IVI.flags.add('stat')
+            IVI.flags['stat'] = IVI.boot_stat
         chunks = [full_msg[i:i+5] for i in range(0, len(full_msg), 5)]
 
         for index, chunk in enumerate(chunks):

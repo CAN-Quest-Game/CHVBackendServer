@@ -114,6 +114,8 @@ if __name__ == '__main__':
         "Have fun with your quests, but remember to be a ETHICAL hacker...\n"
         "To start, enter the IP address of your VM/device running this server.\n"
         "Then, enter that same IP address in the game interface.\n"
+        "***IMPORTANT: YOU MUST BE ON THE SAME WIFI NETWORK!***\n"
+        "***IMPORTANT: YOUR VM SETTINGS MUST BE BRIDGED ADAPTER!***\n"
         "To exit the server, press Ctrl+C or Cmd+C at any time.\n"
         "--------------------------------------------------------------------\n")
 
