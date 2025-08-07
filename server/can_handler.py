@@ -102,7 +102,7 @@ class CAN_Handler:
         while len(payload) < total_len:
             next_msg = self.bus.recv(timeout=30.0)
             if next_msg is None:
-                print('Timeout while waiting for consecutive frame. Try again...')
+                print('Timeout while waiting for consecutive frame! Try again...')
                 self.bus.send(can.Message(arbitration_id=first_msg.arbitration_id+8, data=[0x7F, first_msg.data[2], 0x22], is_extended_id=False))
                 return
             if next_msg.arbitration_id != first_msg.arbitration_id:
@@ -122,7 +122,7 @@ class CAN_Handler:
             message = self.bus.recv()
             if (self.verbose): print(f"Received message: {message}")
             if message.data[0] == 0x10:
-                print("handling multiframe...")
+                if (self.verbose): print("handling multiframe...")
                 #maybe add flow control later
                 self.bus.send(can.Message(arbitration_id=message.arbitration_id+8, data=[0x30, 0x00, 0x00], is_extended_id=False))
                 complete_payload = self.handle_multiframe_msg(message)
@@ -131,7 +131,7 @@ class CAN_Handler:
                     if ecu:
                         ecu.handle_request(complete_payload, self, multiframe=True)
                     else:
-                        if (self.verbose): print("ECU not found")
+                        if self.verbose: print("ECU not found") 
                         return
                 return message, complete_payload
             else:
@@ -146,7 +146,7 @@ class CAN_Handler:
                 if ecu:
                     ecu.handle_request(payload, self)
                 else:
-                    if (self.verbose): print("ECU not found")
+                    if self.verbose: print("ECU not found")
                     return
                 return message, payload
         
@@ -188,7 +188,7 @@ class CAN_Handler:
 
     def _init_ivi(self):
         if config.ota_complete == True and 0x7D0 not in self.ecus:
-            print("initializing IVI\n")
+            if config.verbose: print("initializing IVI\n")
             self.ecus[0x7D0] = IVI(IVI, 0x7D0, 0x7D8, verbose=config.verbose)
             self.broadcast_ivi_boot(is_init=True)
 
@@ -208,9 +208,16 @@ class CAN_Handler:
     def broadcast_tcu_data(self):
         current_time = (int(time.time() - config.start_time))
         timestamp = current_time.to_bytes(2, 'big')
-        print(current_time)
-        tcu_msg = [config.ota_flash_attempts, config.ota_flash_status, 0xCC, 0xCC, timestamp[0], timestamp[1]]
-        #stat msg: ID # flash attempt result (success/fail), # flash attempt (ctr), maybe sub-code/crc check???, timestamp
+        if config.ota_flash_status == 0x01:
+            ascii_stat = [0x46, 0x41, 0x49, 0x4C]
+        elif config.ota_flash_status == 0x02:
+            ascii_stat = [0x49, 0x4E, 0x50, 0x52]
+        elif config.ota_flash_status == 0x03:
+            ascii_stat = [0x47, 0x4F, 0x4F, 0x44]
+        else:
+            ascii_stat = [0x49, 0x44, 0x4B, 0x3F]
+        tcu_msg = [timestamp[0], timestamp[1], config.ota_flash_attempts, config.ota_flash_status, ascii_stat[0], ascii_stat[1], ascii_stat[2], ascii_stat[3]]
+        #stat msg: ID # timestamp flash attempt result (success/fail), # flash attempt (ctr), maybe sub-code/crc check???, 
         self.send_msg(0x333, tcu_msg, is_status=True)
     
     def broadcast_ivi_boot(self, is_init=False):
@@ -218,14 +225,25 @@ class CAN_Handler:
         time_since_boot = int(time.time() - IVI.boot_time)
         timestamp = time_since_boot.to_bytes(2, 'big')
         full_msg = b''
-        if is_init: full_msg += b'OTA FLASH SUCCESS\n'
-        if is_init: full_msg += b'-----FLINTFOTAINMENT SYSTEM BOOT-----\n'
-        if is_init: full_msg += b'DEBUG MODE AVAILABLE WITH EXTENDED, INITIALIZING AT 0x7D0...\n'
-        if IVI.debug: full_msg += b'ENTERING DEBUG MODE....'
-        if IVI.algo: full_msg += b'LOADING XOR/0x5555 LROT/3 ALGORITHM...\n'
-        if IVI.mem: full_msg += b'PARSING CONFIGURABLE MEMORY 0x574253...\n'
-        if IVI.boot_stat: full_msg += b'-----BOOT COMPLETE!-----'
-        if IVI.boot_stat: full_msg+= b'flag{fl1ntst0n3s_1n_f3d0r@s}'
+        if is_init and 'init' not in IVI.flags:
+            full_msg += b'OTA FLASH SUCCESS\n'
+            full_msg += b'-----FLINTFOTAINMENT SYSTEM BOOT-----\n'
+            full_msg += b'DEBUG MODE AVAILABLE WITH EXTENDED, INITIALIZING AT 0x7D0...\n'
+            IVI.flags.add('init')
+        if IVI.debug != 'debug' not in IVI.flags:
+            full_msg += b'ENTERING DEBUG MODE....'
+            IVI.flags.add('debug')
+        if IVI.algo and 'algo' not in IVI.flags: 
+            full_msg += b'LOADING XOR ALGORITHM...\n'
+            IVI.flags.add('algo')
+        if IVI.mem and 'mem' not in IVI.flags: 
+            full_msg += b'PARSING CONFIGURABLE MEMORY 0x574253...\n'
+            full_msg += b'WRITE CONDITION = NUM(YEARS_CURRENT) - NUM(YEARS_FLINTSTONES)...\n'
+            IVI.flags.add('mem')
+        if IVI.boot_stat and 'stat' not in IVI.flags: 
+            full_msg += b'-----BOOT COMPLETE!-----'
+            full_msg+= b'flag{fl1ntst0n3s_1n_f3d0r@s}'
+            IVI.flags.add('stat')
         chunks = [full_msg[i:i+5] for i in range(0, len(full_msg), 5)]
 
         for index, chunk in enumerate(chunks):
@@ -235,26 +253,24 @@ class CAN_Handler:
     
     def send_uds_ota(self):
         TCU = self.get_ecu(0x7A8)
-        print(TCU.req_arb_id)
-        print(TCU.rsp_arb_id)
         TCU.send_ota_data(self)
     
     def process_client_data(self, data):
         if "0x0E" in data: #wipers on
-            print("WIPERS ON")
+            if config.verbose: print("WIPERS ON")
             config.wiper_status = 0x01
         elif "0x0F" in data: #wipers off
-            print("WIPERS OFF")
+            if config.verbose: print("WIPERS OFF")
             config.wiper_status = 0x00
         elif "0x10" in data: #OTA update attempt
             #0x00 = regular???, 0x01 = fail, 0x02 = in progress, 0x03 = success
             config.ota_flash_attempts += 1
             config.ota_flash_status = 0x02
-            self.broadcast_tcu_data()
+            self.broadcast_tcu_data() #broadcasts the in progress first
             self.send_uds_ota()
-            time.sleep(1)
-            print("Flash attempt ctr: ", config.ota_flash_attempts)
+            if config.verbose: print("Flash attempt ctr: ", config.ota_flash_attempts)
             config.ota_flash_status = 0x01
+            time.sleep(1)
             config.client_sock.sendall("0x13".encode('utf-8'))
             self.broadcast_tcu_data()
         else:

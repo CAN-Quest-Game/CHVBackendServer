@@ -24,6 +24,7 @@ class IVI(ECU):
         self.algo = False
         self.mem = False
         self.boot_stat = False
+        self.flags = set()
 
     def initialize_services(self):
         return {
@@ -48,7 +49,6 @@ class IVI(ECU):
         return rsp
 
     def handle_request(self, payload, cansend, verbose=False, multiframe=False):
-        print("tbd")
         if (self.verbose): print(len(payload))
         payload_bytes = re.split(r'\s+', payload)
         dlc = payload_bytes[0]
@@ -70,7 +70,6 @@ class IVI(ECU):
             if self.active_session == 0x03 and isinstance(service, DiagnosticSessionControl):
                 self.debug = True
                 cansend.broadcast_ivi_boot()
-            if (self.verbose): print("worked")
             if rsp == [0x67, 0x01]:
                 if (self.verbose): print("security success yuh")
                 new_rsp = self.security_algorithm(rsp)
@@ -90,6 +89,7 @@ class IVI(ECU):
                         cansend.send_msg(self.rsp_arb_id, rsp)
                         if config.client_sock:
                             config.client_sock.sendall("0x11".encode('utf-8'))
+                            time.sleep(1)
                             config.client_sock.sendall("0x04".encode('utf-8'))
                         self.boot_stat = True
                         cansend.broadcast_ivi_boot()

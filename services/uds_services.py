@@ -408,12 +408,13 @@ class TransferData(UDS_Service):
 
     def crc_check(self, recv_crc):
         data_bytes = bytes(int(x, 16) for x in self.data_chunks if x.strip() != '')
-        print(data_bytes)
+        #print(data_bytes)
         crc32 = binascii.crc32(data_bytes) & 0xFFFFFFFF  # Ensure unsigned 32-bit result
         given_crc = int(''.join(recv_crc), 16)
         correct_crc = 0x7191998A
-        print("Expected CRC: 0x7191998A")
-        print(f"Recieved CRC32: {crc32:#010x}")
+        self.data_chunks = []
+        #print("Expected CRC: 0x7191998A")
+        #print(f"Recieved CRC32: {crc32:#010x}")
         return crc32 == given_crc == correct_crc
     
     def validate_length(self, dlc, payload):
@@ -462,10 +463,10 @@ class TransferData(UDS_Service):
             subfunction = int(payload[2], 16)
         else:
             subfunction = int(payload[1], 16)
-        print("before: ", subfunction)
+        #print("before: ", subfunction)
         if subfunction == self.sequence_number + 1 and self.sequence_number < 5:
             self.sequence_number = subfunction
-            print("after: ", subfunction)
+            #print("after: ", subfunction)
             return True
         elif subfunction == 1 and self.sequence_number == 5:
             self.sequence_number = subfunction

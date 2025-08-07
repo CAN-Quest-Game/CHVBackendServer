@@ -40,7 +40,7 @@ def client_handler(client_sock, can_handler, stop_can, verbose=config.verbose):
                 config.server_down = True
                 break
 
-            print('\n' + f"Received from client: {data}" + '\n')
+            if config.verbose: print('\n' + f"Received from client: {data}" + '\n')
 
     except Exception as e:
         print(f"Client Error: {e}")
@@ -110,7 +110,7 @@ if __name__ == '__main__':
         "╚██████╗██║  ██║██║ ╚████║╚██████╔╝╚██████╔╝███████╗███████║   ██║   \n"
         " ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚══▀▀═╝  ╚═════╝ ╚══════╝╚══════╝   ╚═╝  \n"
         "--------------------------------------------------------------------\n"
-        "Welcome to the CANQuest Backend Server v1.0!\n"
+        "Welcome to the CANQuest Backend Server v2.0 - CHV!\n"
         "Have fun with your quests, but remember to be a ETHICAL hacker...\n"
         "To start, enter the IP address of your VM/device running this server.\n"
         "Then, enter that same IP address in the game interface.\n"

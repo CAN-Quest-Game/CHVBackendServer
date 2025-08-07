@@ -26,12 +26,7 @@ class TCU(ECU):
             0x37: RequestTransferExit()
         }
 
-
     def send_ota_data(self, cansend):
-        #send 0x34, 0x36
-        # if config.ota_flash_status == 0x02:
-        #     print("working TCU")
-
         #CORRUPTPAYLOAD: 53 4F 46 54 57 41 52 45 2D 55 50 44 41 54 45 3A 20 59 61 62 62 61 2D 64 61 62 62 79 2D 64 6F 6F 21
         #EXPECTEDPAYLOAD: 53 4F 46 54 57 41 52 45 2D 55 50 44 41 54 45 3A 20 59 61 62 62 61 2D 64 61 62 62 61 2D 64 6F 6F 21
 
@@ -66,14 +61,6 @@ class TCU(ECU):
         cansend.send_msg(self.rsp_arb_id, [0x76, 0x04])
         cansend.send_msg(self.req_arb_id, crc)
         cansend.send_msg(self.rsp_arb_id, [0x76, 0x05])
-
-        #TODO:use elsewhere
-        pay=bytes(b1[2:]+b2[2:]+b3[2:])
-        print(pay)
-        crc32 = binascii.crc32(pay) & 0xFFFFFFFF  # Ensure unsigned 32-bit result
-        # Show as hex
-        print("Expected CRC: 0x7191998A")
-        print(f"Recieved CRC32: {crc32:#010x}")
 
         #request transfer exit
         req_exit = [0x37]
@@ -113,7 +100,6 @@ class TCU(ECU):
             elif isinstance(service, TransferData):
                 if self.req_download_complete == True:
                     if rsp == [0x76, service.sequence_number]:
-                        print("yuhhhhh")
                         cansend.send_msg(self.rsp_arb_id, rsp)
                         self.valid_crc = service.get_update_payload(payload_bytes)
                     else:
@@ -124,13 +110,14 @@ class TCU(ECU):
                 if self.req_download_complete == True:
                     if self.valid_crc == True:
                         if rsp == [0x77]:
-                            print("YUHHHHH")
+                            if (verbose): print("YUHHHHH")
                             cansend.send_msg(self.rsp_arb_id, rsp)
                             config.ota_flash_attempts += 1
                             config.ota_flash_status = 0x03
                             config.ota_complete = True
                             cansend._init_ivi()
                             cansend.broadcast_tcu_data()
+                            #self.valid_crc = False #CHECK
                             if config.client_sock:
                                 config.client_sock.sendall("0x12".encode('utf-8'))
                         else:
