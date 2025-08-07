@@ -69,4 +69,4 @@ echo "Caring-Caribou is a helpful tool you can explore by running caringcaribou 
 sudo docker pull canquest0/mac-can-handler:arm64-latest
 
 echo "Starting server container..."
-sudo docker run -it --rm --network host canquest0/mac-can-handler:arm64-latest
+sudo docker run -it --rm --network host canquest0/mac-can-handler:latest
